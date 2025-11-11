@@ -1,13 +1,12 @@
 #!/bin/bash
+#!/bin/bash
 
-# Creating kind cluster
-kind create cluster --config cluster.yml
+kubectl create namespace mysql
+kubectl create namespace todoapp
 
-# Applying MySQL StatefulSet
-kubectl apply -f statefulSet.yml
+kubectl apply -f .infrastructure/st-secret.yml -n mysql
+kubectl apply -f .infrastructure/st-configMap.yml -n mysql
+kubectl apply -f .infrastructure/st-service.yml -n mysql
+kubectl apply -f .infrastructure/statefulSet.yml -n mysql
 
-# Deploying Django ToDo app
-kubectl apply -f deployment.yml
-
-# Done! Check resources with:
-echo "kubectl get pods -A"
+kubectl apply -f .infrastructure/deployment.yml -n todoapp
