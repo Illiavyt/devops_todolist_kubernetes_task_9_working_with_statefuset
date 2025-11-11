@@ -1,105 +1,69 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
-  name: todoapp
-  namespace: todoapp
+  name: mysql
+  namespace: mysql
 spec:
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 1
+  replicas: 3
+  serviceName: mysql
   selector:
     matchLabels:
-      app: todoapp
+      app: mysql
   template:
     metadata:
       labels:
-        app: todoapp
+        app: mysql
     spec:
       containers:
-      - name: todoapp
-        image: ikulyk404/todoapp:3.0.0
-        volumeMounts:
-        - name: data
-          mountPath: /app/data
-        - name: app-secrets-volume
-          mountPath: /app/secrets
-          readOnly: true
-        - name: app-config-volume
-          mountPath: /app/configs
-          readOnly: true
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "150m"
-          limits:
-            memory: "256Mi"
-            cpu: "150m"
+      - name: mysql
+        image: mysql:8.0
         env:
-        - name: PYTHONUNBUFFERED
-          valueFrom:
-            configMapKeyRef:
-              name: app-config
-              key: PYTHONUNBUFFERED
-        - name: SECRET_KEY
+        - name: MYSQL_ROOT_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: app-secret
-              key: SECRET_KEY
-        - name: NAME
+              name: mysql-secrets
+              key: MYSQL_ROOT_PASSWORD
+        - name: MYSQL_USER
           valueFrom:
             secretKeyRef:
-              name: todoapp-db-secret
-              key: NAME
-        - name: USER
+              name: mysql-secrets
+              key: MYSQL_USER
+        - name: MYSQL_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: todoapp-db-secret
-              key: USER
-        - name: PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: todoapp-db-secret
-              key: PASSWORD
-        - name: HOST
-          valueFrom:
-            secretKeyRef:
-              name: todoapp-db-secret
-              key: HOST
+              name: mysql-secrets
+              key: MYSQL_PASSWORD
+        - name: MYSQL_DATABASE
+          value: app_db
         ports:
-        - containerPort: 8080
+        - containerPort: 3306
+          name: mysql
+        volumeMounts:
+        - name: mysql-data
+          mountPath: /var/lib/mysql
+        - name: initdb
+          mountPath: /docker-entrypoint-initdb.d
         livenessProbe:
-          httpGet:
-            path: /api/health
-            port: 8080
-          initialDelaySeconds: 60
-          periodSeconds: 5
+          exec:
+            command: ["mysqladmin", "ping", "-h", "localhost"]
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
         readinessProbe:
-          httpGet:
-            path: /api/ready
-            port: 8080
+          exec:
+            command: ["mysqladmin", "ping", "-h", "localhost"]
           initialDelaySeconds: 5
-          periodSeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
       volumes:
-      - name: data
-        persistentVolumeClaim:
-          claimName: pvc-data
-      - name: app-secrets-volume
-        secret:
-          secretName: app-secret
-      - name: app-config-volume
+      - name: initdb
         configMap:
-          name: app-config
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: todoapp-db-secret
-  namespace: todoapp
-type: Opaque
-stringData:
-  NAME: app_db
-  USER: todo_user
-  PASSWORD: todo_pass
-  HOST: mysql-0.mysql.mysql.svc.cluster.local
+          name: mysql-initdb
+  volumeClaimTemplates:
+  - metadata:
+      name: mysql-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 2Gi
